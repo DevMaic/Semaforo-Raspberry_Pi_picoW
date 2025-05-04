@@ -17,6 +17,7 @@
 
 uint8_t activeLed = 1;
 bool buzzerActive = true; // Variável para controlar o estado do buzzer
+bool isNocturneModeOn = false; // Variável para controlar a alternância entre os modos 
 int buzzerFrequency = 2000; // Frequência do buzzer em Hz
 
 void vBlinkLedTask() {
@@ -28,44 +29,60 @@ void vBlinkLedTask() {
     gpio_set_dir(13, GPIO_OUT);
 
     while(true) {
-        if(activeLed == 1) {
-            gpio_put(11, true);
-            gpio_put(12, false);
-            gpio_put(13, false);
-            buzzerActive = true;
-            vTaskDelay(pdMS_TO_TICKS(1000));
-            buzzerActive = false;
-            vTaskDelay(pdMS_TO_TICKS(1000));
-            activeLed = 2; // Change to the next LED
-        } else if(activeLed == 2) {
+        if(!isNocturneModeOn) {
+            if(activeLed == 1) {
+                gpio_put(11, true);
+                gpio_put(12, false);
+                gpio_put(13, false);
+
+                buzzerActive = true;
+                vTaskDelay(pdMS_TO_TICKS(1000));
+                buzzerActive = false;
+
+                activeLed = 2; // Change to the next LED
+            } else if(activeLed == 2) {
+                gpio_put(11, true);
+                gpio_put(12, false);
+                gpio_put(13, true);
+
+                buzzerActive = true;
+                vTaskDelay(pdMS_TO_TICKS(250));
+                buzzerActive = false;
+                vTaskDelay(pdMS_TO_TICKS(250));
+                buzzerActive = true;
+                vTaskDelay(pdMS_TO_TICKS(250));
+                buzzerActive = false;
+                vTaskDelay(pdMS_TO_TICKS(250));
+                buzzerActive = true;
+                vTaskDelay(pdMS_TO_TICKS(250));
+                buzzerActive = false;
+                vTaskDelay(pdMS_TO_TICKS(250));
+
+                activeLed = 3; // Change to the next LED
+            } else if(activeLed == 3) {
+                gpio_put(11, false);
+                gpio_put(12, false);
+                gpio_put(13, true);
+
+                buzzerActive = true;
+                vTaskDelay(pdMS_TO_TICKS(500));
+                buzzerActive = false;
+                vTaskDelay(pdMS_TO_TICKS(500));
+
+                activeLed = 1; // Change to the next LED
+            }
+
+            vTaskDelay(pdMS_TO_TICKS(1000)); // Delay para evitar uso excessivo da CPU
+        } else {
             gpio_put(11, true);
             gpio_put(12, false);
             gpio_put(13, true);
+
             buzzerActive = true;
             vTaskDelay(pdMS_TO_TICKS(250));
             buzzerActive = false;
-            vTaskDelay(pdMS_TO_TICKS(250));
-            buzzerActive = true;
-            vTaskDelay(pdMS_TO_TICKS(250));
-            buzzerActive = false;
-            vTaskDelay(pdMS_TO_TICKS(250));
-            buzzerActive = true;
-            vTaskDelay(pdMS_TO_TICKS(250));
-            buzzerActive = false;
-            vTaskDelay(pdMS_TO_TICKS(250));
-            activeLed = 3; // Change to the next LED
-        } else if(activeLed == 3) {
-            gpio_put(11, false);
-            gpio_put(12, false);
-            gpio_put(13, true);
-            buzzerActive = true;
-            vTaskDelay(pdMS_TO_TICKS(500));
-            buzzerActive = false;
-            // vTaskDelay(1);
-            vTaskDelay(pdMS_TO_TICKS(500));
-            activeLed = 1; // Change to the next LED
+            vTaskDelay(pdMS_TO_TICKS(2000));
         }
-        vTaskDelay(pdMS_TO_TICKS(1000)); // Delay para evitar uso excessivo da CPU
     }
 }
 
@@ -87,7 +104,6 @@ void vBuzzerTask() {
             pwm_set_enabled(slice_num, true); // Apenas liga/desliga
         } else {
             pwm_set_enabled(slice_num, false);
-            // vTaskDelay(pdMS_TO_TICKS(1000)); // Delay para evitar uso excessivo da CPU
         }
         vTaskDelay(1); // Yield para outras tarefas
     }
@@ -132,9 +148,21 @@ void vDisplay3Task() {
 
 // Trecho para modo BOOTSEL com botão B
 #include "pico/bootrom.h"
+#define botaoA 5
 #define botaoB 6
 void gpio_irq_handler(uint gpio, uint32_t events) {
-    reset_usb_boot(0, 0);
+    uint32_t currentTime = to_us_since_boot(get_absolute_time());
+    static uint32_t lastTime = 0; // Variável estática para armazenar o último tempo de interrupção
+
+    if(currentTime - lastTime > 300000) { // Debounce
+        if(gpio == botaoA) {
+            isNocturneModeOn = !isNocturneModeOn; // Alterna entre os modos
+        } else if(gpio == botaoB) {
+            reset_usb_boot(0, 0);
+        }
+        
+        lastTime = currentTime;
+    }
 }
 
 int main() {
@@ -143,13 +171,18 @@ int main() {
     gpio_set_dir(botaoB, GPIO_IN);
     gpio_pull_up(botaoB);
     gpio_set_irq_enabled_with_callback(botaoB, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_handler);
-    // Fim do trecho para modo BOOTSEL com botão B
+
+    // Botão A(5) usado para alternar entre os modos noturno e diurno
+    gpio_init(botaoA);
+    gpio_set_dir(botaoA, GPIO_IN);
+    gpio_pull_up(botaoA);
+    gpio_set_irq_enabled_with_callback(botaoA, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_handler);
 
     stdio_init_all();
 
     xTaskCreate(vBlinkLedTask, "Blink Led Task", configMINIMAL_STACK_SIZE, NULL, tskIDLE_PRIORITY, NULL);
     xTaskCreate(vBuzzerTask, "Buzzer Task", configMINIMAL_STACK_SIZE, NULL, tskIDLE_PRIORITY, NULL);
-    // xTaskCreate(vDisplay3Task, "Cont Task Disp3", configMINIMAL_STACK_SIZE, NULL, tskIDLE_PRIORITY, NULL);
+    xTaskCreate(vDisplay3Task, "Cont Task Disp3", configMINIMAL_STACK_SIZE, NULL, tskIDLE_PRIORITY, NULL);
     vTaskStartScheduler();
     panic_unsupported();
 }
