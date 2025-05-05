@@ -188,7 +188,6 @@ void vDisplayTask() {
         ssd1306_line(&ssd, 20, 7, 20, 57, cor);          // Desenha uma linha
         ssd1306_line(&ssd, 20, 57, 45, 57, cor);           // Desenha uma linha
         ssd1306_line(&ssd, 45, 7, 45, 57, cor);           // Desenha uma linha
-        vTaskDelay(pdMS_TO_TICKS(250)); // Delay para evitar uso excessivo da CPU
 
         if(isNocturneModeOn) {
             ssd1306_rect(&ssd, 12, 28, 11, 10, cor, !cor);      // Desenha um retângulo
