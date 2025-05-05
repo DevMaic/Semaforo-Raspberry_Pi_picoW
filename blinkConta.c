@@ -11,7 +11,10 @@
 #include "FreeRTOSConfig.h"
 #include "task.h"
 #include <stdio.h>
+#include "pico/bootrom.h"
 
+#define botaoA 5
+#define botaoB 6
 #define I2C_PORT i2c1
 #define I2C_SDA 14
 #define I2C_SCL 15
@@ -190,14 +193,15 @@ void vDisplayTask() {
         if(isNocturneModeOn) {
             ssd1306_rect(&ssd, 12, 28, 11, 10, cor, !cor);      // Desenha um retângulo
             ssd1306_rect(&ssd, 27, 28, 11, 10, cor, cor);      // Desenha um retângulo
-            ssd1306_rect(&ssd, 42, 28, 11, 10, cor, !cor);  
+            ssd1306_rect(&ssd, 42, 28, 11, 10, cor, !cor); 
+            ssd1306_draw_string(&ssd, "Amarelo", 50, 29);    // Desenha uma string
         } else {
             ssd1306_rect(&ssd, 12, 28, 11, 10, cor, activeLed==1?cor:!cor);      // Desenha um retângulo
             ssd1306_rect(&ssd, 27, 28, 11, 10, cor, activeLed==2?cor:!cor);      // Desenha um retângulo
             ssd1306_rect(&ssd, 42, 28, 11, 10, cor, activeLed==3?cor:!cor);      // Desenha um retângulo
+            ssd1306_draw_string(&ssd, activeLed==1?"Verde":activeLed==2?"Amarelo":"Vermelho", 50, 29);    // Desenha uma string
         }
-
-        ssd1306_draw_string(&ssd, activeLed==1?"Verde":activeLed==2?"Amarelo":"Vermelho", 50, 29);    // Desenha uma string
+        
         ssd1306_send_data(&ssd);    // Atualiza o display
         vTaskDelay(1);
     }
@@ -212,31 +216,38 @@ void vLedMatrixTask() {
     pio_matrix_program_init(pio, sm, offset, 7);
 
     while(1) {
-        set_pixel_color(7, 0, activeLed==1?0.1:0, 0);
-        set_pixel_color(12, activeLed==2?0.1:0, activeLed==2?0.1:0, 0);
-        set_pixel_color(17, activeLed==3?0.1:0, 0, 0);
-        desenho_pio(pio, sm);
+        if(isNocturneModeOn) {
+            set_pixel_color(7, 0, 0, 0);
+            set_pixel_color(12, 1, 1, 0);
+            set_pixel_color(17, 0, 0, 0);
+            desenho_pio(pio, sm);
+        } else {
+            set_pixel_color(7, 0, activeLed==1?0.1:0, 0);
+            set_pixel_color(12, activeLed==2?0.1:0, activeLed==2?0.1:0, 0);
+            set_pixel_color(17, activeLed==3?0.1:0, 0, 0);
+            desenho_pio(pio, sm);
+        }
+
         vTaskDelay(1); // Yield para outras tarefas
     }
 }
 
-// Trecho para modo BOOTSEL com botão B
-#include "pico/bootrom.h"
-#define botaoA 5
-#define botaoB 6
-void gpio_irq_handler(uint gpio, uint32_t events) {
-    uint32_t currentTime = to_us_since_boot(get_absolute_time());
-    static uint32_t lastTime = 0; // Variável estática para armazenar o último tempo de interrupção
+void vButtonAPressedTask() {
+    while(1) {
+        uint32_t currentTime = to_us_since_boot(get_absolute_time());
+        static uint32_t lastTime = 0; // Variável estática para armazenar o último tempo de interrupção
 
-    if(currentTime - lastTime > 300000) { // Debounce
-        if(gpio == botaoA) {
+        if(currentTime - lastTime > 300000 && !gpio_get(botaoA)) { // Debounce
             isNocturneModeOn = !isNocturneModeOn; // Alterna entre os modos
-        } else if(gpio == botaoB) {
-            reset_usb_boot(0, 0);
+            lastTime = currentTime;
         }
-        
-        lastTime = currentTime;
+
+        vTaskDelay(1); // Yield para outras tarefas
     }
+}
+
+void gpio_irq_handler(uint gpio, uint32_t events) {
+    reset_usb_boot(0, 0);
 }
 
 int main() {
@@ -252,12 +263,12 @@ int main() {
     gpio_init(botaoA);
     gpio_set_dir(botaoA, GPIO_IN);
     gpio_pull_up(botaoA);
-    gpio_set_irq_enabled_with_callback(botaoA, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_handler);
 
     xTaskCreate(vBlinkLedTask, "Blink Led Task", configMINIMAL_STACK_SIZE, NULL, tskIDLE_PRIORITY, NULL);
     xTaskCreate(vBuzzerTask, "Buzzer Task", configMINIMAL_STACK_SIZE, NULL, tskIDLE_PRIORITY, NULL);
     xTaskCreate(vDisplayTask, "Display Task", configMINIMAL_STACK_SIZE, NULL, tskIDLE_PRIORITY+1, NULL);
     xTaskCreate(vLedMatrixTask, "LedMatrix Task", configMINIMAL_STACK_SIZE, NULL, tskIDLE_PRIORITY+1, NULL);
+    xTaskCreate(vButtonAPressedTask, "Button A Task", configMINIMAL_STACK_SIZE, NULL, tskIDLE_PRIORITY+1, NULL);
     vTaskStartScheduler();
     panic_unsupported();
 }
