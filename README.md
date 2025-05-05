@@ -30,6 +30,13 @@ cd Semaforo-Raspberry_Pi_picoW
 
 
 ### **Execução na Placa BitDogLab**
-#### **1. Observando os resultados**
-1. Esse projeto não exige configuração alguma por parte do usuário, ligue a BitDogLab e observe a simulação do semáforo no display, na matriz de leds, nos leds RGB e também o auxílio sonoro para deficientes auditivos.
+#### **1. Coloque em Modo Reboot**
+1. Aperte o botão **BOOTSEL** no microcontrolador Raspberry Pi Pico W.
+2. Ao mesmo tempo, aperte o botão de **Reset**.
+#### **2. Upload de Arquivo `PiscaLed.uf2`**
+1. Importe o projeto utilizando a extensão do VSCode, e o compile.
+2. Abra a pasta `build` que será gerada na compilação.
+3. Mova o arquivo `PiscaLed.uf2` para a placa de desenvolvimento.
+#### **4. Acompanhar Execução do Programa**
+1. Esse projeto não exige configuração alguma por parte do usuário, assim que mover o projeto para a placa observe a simulação do semáforo no display, na matriz de leds, nos leds RGB e também o auxílio sonoro para deficientes auditivos, tudo sincronizado por meio de tarefas.
    
