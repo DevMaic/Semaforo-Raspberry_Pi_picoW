@@ -27,21 +27,22 @@ include(${FREERTOS_KERNEL_PATH}/portable/ThirdParty/GCC/RP2040/FreeRTOS_Kernel_i
 project(PiscaLed C CXX ASM)
 pico_sdk_init()
 
-
 include_directories(${CMAKE_SOURCE_DIR}/lib)
 
-
 add_executable(${PROJECT_NAME}  
-        blinkConta.c 
-        lib/ssd1306.c # Biblioteca para o display OLED
-        )
+blinkConta.c 
+lib/ssd1306.c # Biblioteca para o display OLED
+)
 
 target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_SOURCE_DIR})
+
+pico_generate_pio_header(${PROJECT_NAME} ${CMAKE_CURRENT_LIST_DIR}/pio_matrix.pio)
 
 target_link_libraries(${PROJECT_NAME} 
         pico_stdlib 
         hardware_gpio
         hardware_pwm
+        hardware_pio
         hardware_clocks
         hardware_i2c
         FreeRTOS-Kernel 
