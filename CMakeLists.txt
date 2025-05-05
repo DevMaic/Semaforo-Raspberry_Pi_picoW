@@ -36,7 +36,7 @@ lib/ssd1306.c # Biblioteca para o display OLED
 
 target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_SOURCE_DIR})
 
-pico_generate_pio_header(${PROJECT_NAME} ${CMAKE_CURRENT_LIST_DIR}/pio_matrix.pio)
+pico_generate_pio_header(${PROJECT_NAME} ${CMAKE_CURRENT_LIST_DIR}/lib/pio_matrix.pio)
 
 target_link_libraries(${PROJECT_NAME} 
         pico_stdlib 
