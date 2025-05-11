@@ -20,11 +20,12 @@
 #define I2C_SCL 15
 #define endereco 0x3C
 
-uint8_t activeLed = 1;
+uint8_t activeLed = 1; // Variável para controlar o LED ativo (1, 2 ou 3)
 bool buzzerActive = true; // Variável para controlar o estado do buzzer
 bool isNocturneModeOn = false; // Variável para controlar a alternância entre os modos 
 int buzzerFrequency = 2000; // Frequência do buzzer em Hz
 
+//------------- Inicio das estruturas e funções usadas pra matriz de leds -------------//
 typedef struct {
   double r;
   double g;
@@ -40,8 +41,7 @@ Pixel desenho[25] = {
 };
 
 //rotina para definição da intensidade de cores do led
-uint32_t matrix_rgb(double b, double r, double g)
-{
+uint32_t matrix_rgb(double b, double r, double g) {
   unsigned char R, G, B;
   R = r * 255;
   G = g * 255;
@@ -71,8 +71,11 @@ void set_pixel_color(int led_index, double r, double g, double b) {
     desenho[led_index].b = b;
   }
 }
+//------------- Fim das estruturas e funções usadas usadas pra matriz de leds -------------//
 
+// Tarefa de controle dos leds 11, 12 e 13 e controle dos estados
 void vBlinkLedTask() {
+    // Configuração dos pinos dos LEDs
     gpio_init(11);
     gpio_set_dir(11, GPIO_OUT);
     gpio_init(12);
@@ -81,6 +84,7 @@ void vBlinkLedTask() {
     gpio_set_dir(13, GPIO_OUT);
 
     while(true) {
+        // entrando nesse if alterna entre os LEDs 11, 12 e 13 e controla os tempos em cada estado do semáforo
         if(!isNocturneModeOn) {
             if(activeLed == 1) {
                 gpio_put(11, true);
@@ -124,11 +128,13 @@ void vBlinkLedTask() {
 
                 activeLed = 1; // Change to the next LED
             }
-        } else {
+        } else { // Nesse else entra no modo noturno
+            // Ativa os leds responsáveis por a cor amarela
             gpio_put(11, true);
             gpio_put(12, false);
             gpio_put(13, true);
 
+            // Emite um bip de 250ms a cada 2 segundos
             buzzerActive = true;
             vTaskDelay(pdMS_TO_TICKS(250));
             buzzerActive = false;
@@ -137,6 +143,7 @@ void vBlinkLedTask() {
     }
 }
 
+// Tarefa de controle do Buzzer
 void vBuzzerTask() {
     // Configuração ÚNICA (fora do loop)
     gpio_set_function(21, GPIO_FUNC_PWM);
@@ -151,15 +158,18 @@ void vBuzzerTask() {
     pwm_set_chan_level(slice_num, pwm_gpio_to_channel(21), wrap / 2);
 
     while(true) {
+        // Apenas liga/desliga o buzzer dependendo do estado do buzzerActive
         if(buzzerActive) {
-            pwm_set_enabled(slice_num, true); // Apenas liga/desliga
+            pwm_set_enabled(slice_num, true);
         } else {
             pwm_set_enabled(slice_num, false);
         }
+
         vTaskDelay(1); // Yield para outras tarefas
     }
 }
 
+// Tarefa de controle do display OLED
 void vDisplayTask() {
     // I2C Initialisation. Using it at 400Khz.
     i2c_init(I2C_PORT, 400 * 1000);
@@ -189,12 +199,14 @@ void vDisplayTask() {
         ssd1306_line(&ssd, 20, 57, 45, 57, cor);           // Desenha uma linha
         ssd1306_line(&ssd, 45, 7, 45, 57, cor);           // Desenha uma linha
 
+        // Entra nesse if caso o modo noturno esteja ativado 
         if(isNocturneModeOn) {
-            ssd1306_rect(&ssd, 12, 28, 11, 10, cor, !cor);      // Desenha um retângulo
+            ssd1306_rect(&ssd, 12, 28, 11, 10, cor, !cor);     // Desenha um retângulo
             ssd1306_rect(&ssd, 27, 28, 11, 10, cor, cor);      // Desenha um retângulo
-            ssd1306_rect(&ssd, 42, 28, 11, 10, cor, !cor); 
+            ssd1306_rect(&ssd, 42, 28, 11, 10, cor, !cor);     // Desenha um retângulo
             ssd1306_draw_string(&ssd, "Amarelo", 50, 29);    // Desenha uma string
         } else {
+            // Entra nesse else caso o modo noturno esteja desativado
             ssd1306_rect(&ssd, 12, 28, 11, 10, cor, activeLed==1?cor:!cor);      // Desenha um retângulo
             ssd1306_rect(&ssd, 27, 28, 11, 10, cor, activeLed==2?cor:!cor);      // Desenha um retângulo
             ssd1306_rect(&ssd, 42, 28, 11, 10, cor, activeLed==3?cor:!cor);      // Desenha um retângulo
@@ -206,6 +218,7 @@ void vDisplayTask() {
     }
 }
 
+// Tarefa de controle da matriz de LEDs
 void vLedMatrixTask() {
     //configurações da PIO
     PIO pio = pio0;
@@ -215,6 +228,7 @@ void vLedMatrixTask() {
     pio_matrix_program_init(pio, sm, offset, 7);
 
     while(1) {
+        // Atualiza a matriz de LEDs com base no estado do modo noturno
         if(isNocturneModeOn) {
             set_pixel_color(7, 0, 0, 0);
             set_pixel_color(12, 1, 1, 0);
@@ -231,13 +245,14 @@ void vLedMatrixTask() {
     }
 }
 
+// Tarefa de controle do botão A
 void vButtonAPressedTask() {
     while(1) {
         uint32_t currentTime = to_us_since_boot(get_absolute_time());
         static uint32_t lastTime = 0; // Variável estática para armazenar o último tempo de interrupção
 
         if(currentTime - lastTime > 300000 && !gpio_get(botaoA)) { // Debounce
-            isNocturneModeOn = !isNocturneModeOn; // Alterna entre os modos
+            isNocturneModeOn = !isNocturneModeOn; // Alterna entre os modos sempre que o botão A for pressionado
             lastTime = currentTime;
         }
 
@@ -245,6 +260,7 @@ void vButtonAPressedTask() {
     }
 }
 
+// Tarefa de controle do botão B (BOOTSEL)
 void gpio_irq_handler(uint gpio, uint32_t events) {
     reset_usb_boot(0, 0);
 }
